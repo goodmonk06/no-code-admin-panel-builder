@@ -12,31 +12,43 @@ datasource db {
 
 // Stores database connection information
 model Connection {
-  id        String   @id @default(cuid())
-  name      String   // User-friendly name
-  type      String   @default("postgres") // postgres, mysql, etc.
-  configJson String  @db.Text // JSON storing host, port, database, user, password
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(cuid())
+  name       String    // User-friendly name
+  type       String    @default("postgres") // postgres, mysql, etc.
+  configJson String    @db.Text // JSON storing host, port, database, user, password
+  status     String    @default("active") // active, inactive, error
+  metadata   String?   @db.Text // JSON for extensible properties
+  archivedAt DateTime? // Soft delete timestamp
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  entities  EntityConfig[]
+  entities   EntityConfig[]
+  auditLogs  AuditLog[]
+  webhooks   Webhook[]
 
   @@map("connections")
 }
 
 // Stores configuration for each table/entity
 model EntityConfig {
-  id            String   @id @default(cuid())
-  connectionId  String
-  tableName     String   // Actual table name in the target DB
-  displayName   String   // Human-readable name for UI
-  fieldsJson    String   @db.Text // JSON array of field configs with types, labels, visibility
-  permissionsJson String @db.Text // JSON object with role-based permissions
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String    @id @default(cuid())
+  connectionId    String
+  tableName       String    // Actual table name in the target DB
+  displayName     String    // Human-readable name for UI
+  fieldsJson      String    @db.Text // JSON array of field configs with types, labels, visibility
+  permissionsJson String    @db.Text // JSON object with role-based permissions
+  metadata        String?   @db.Text // JSON for extensible properties
+  archivedAt      DateTime? // Soft delete timestamp
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  connection    Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connection    Connection     @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   views         ViewConfig[]
+  savedViews    SavedView[]
+  auditLogs     AuditLog[]
+  comments      Comment[]
+  tags          EntityTag[]
+  templates     DataTemplate[]
 
   @@unique([connectionId, tableName])
   @@index([connectionId])
@@ -61,12 +73,204 @@ model ViewConfig {
 
 // Simple user model for permissions
 model User {
+  id         String    @id @default(cuid())
+  email      String    @unique
+  name       String?
+  role       String    @default("viewer") // admin, editor, viewer
+  metadata   String?   @db.Text // JSON for extensible properties
+  archivedAt DateTime? // Soft delete timestamp
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  savedViews SavedView[]
+  auditLogs  AuditLog[]
+  comments   Comment[]
+  apiKeys    ApiKey[]
+
+  @@map("users")
+}
+
+// Audit log for tracking all data changes
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  connectionId String?
+  entityId     String?
+  action       String // create, update, delete, introspect
+  entityType   String // connection, entity, data_row, etc.
+  recordId     String? // ID of the affected record
+  changes      String? @db.Text // JSON diff of changes
+  metadata     String? @db.Text // Additional context
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  connection Connection?   @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  entity     EntityConfig? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([connectionId])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Saved views for users to customize their list views
+model SavedView {
+  id          String   @id @default(cuid())
+  userId      String
+  entityId    String
+  name        String
+  description String?
+  filtersJson String   @db.Text // JSON of filter criteria
+  sortJson    String?  @db.Text // JSON of sort configuration
+  columnsJson String?  @db.Text // JSON of visible columns
+  isDefault   Boolean  @default(false)
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity EntityConfig @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityId])
+  @@map("saved_views")
+}
+
+// Data templates for common record patterns
+model DataTemplate {
+  id          String   @id @default(cuid())
+  entityId    String
+  name        String
+  description String?
+  dataJson    String   @db.Text // JSON of template data
+  category    String? // e.g., "starter", "example", "test"
+  metadata    String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entity EntityConfig @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+  @@index([category])
+  @@map("data_templates")
+}
+
+// Webhooks for event notifications
+model Webhook {
+  id           String    @id @default(cuid())
+  connectionId String?
+  name         String
+  url          String
+  events       String    @db.Text // JSON array of event types
+  secret       String? // Webhook signing secret
+  active       Boolean   @default(true)
+  metadata     String?   @db.Text
+  lastTriggeredAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  connection Connection? @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([connectionId])
+  @@index([active])
+  @@map("webhooks")
+}
+
+// Webhook delivery attempts and status
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  webhookId  String
+  eventType  String
+  payload    String   @db.Text // JSON event payload
+  statusCode Int?
+  response   String?  @db.Text
+  error      String?  @db.Text
+  attemptCount Int    @default(1)
+  deliveredAt DateTime?
+  createdAt  DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
+}
+
+// API keys for programmatic access
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  key         String    @unique // Hashed API key
+  prefix      String // First 8 chars for identification
+  scopes      String    @db.Text // JSON array of allowed scopes
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  metadata    String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([prefix])
+  @@map("api_keys")
+}
+
+// Tags for flexible categorization
+model Tag {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("viewer") // admin, editor, viewer
+  name      String   @unique
+  color     String? // Hex color for UI
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("users")
+  entities EntityTag[]
+
+  @@map("tags")
+}
+
+// Join table for entity-tag many-to-many
+model EntityTag {
+  id        String   @id @default(cuid())
+  entityId  String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  entity EntityConfig @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  tag    Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, tagId])
+  @@index([entityId])
+  @@index([tagId])
+  @@map("entity_tags")
+}
+
+// Comments for collaborative notes
+model Comment {
+  id        String    @id @default(cuid())
+  userId    String
+  entityId  String
+  recordId  String? // ID of specific record, null for entity-level comments
+  content   String    @db.Text
+  metadata  String?   @db.Text
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity EntityConfig @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityId])
+  @@index([recordId])
+  @@index([createdAt])
+  @@map("comments")
 }
