@@ -1,0 +1,72 @@
+// This is the control plane database schema
+// It stores metadata about connections, entities, and views
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Stores database connection information
+model Connection {
+  id        String   @id @default(cuid())
+  name      String   // User-friendly name
+  type      String   @default("postgres") // postgres, mysql, etc.
+  configJson String  @db.Text // JSON storing host, port, database, user, password
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entities  EntityConfig[]
+
+  @@map("connections")
+}
+
+// Stores configuration for each table/entity
+model EntityConfig {
+  id            String   @id @default(cuid())
+  connectionId  String
+  tableName     String   // Actual table name in the target DB
+  displayName   String   // Human-readable name for UI
+  fieldsJson    String   @db.Text // JSON array of field configs with types, labels, visibility
+  permissionsJson String @db.Text // JSON object with role-based permissions
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  connection    Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  views         ViewConfig[]
+
+  @@unique([connectionId, tableName])
+  @@index([connectionId])
+  @@map("entity_configs")
+}
+
+// Stores UI layout configuration for different views
+model ViewConfig {
+  id         String   @id @default(cuid())
+  entityId   String
+  type       String   // list, detail, edit
+  layoutJson String   @db.Text // JSON defining the layout, columns, filters, etc.
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  entity     EntityConfig @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, type])
+  @@index([entityId])
+  @@map("view_configs")
+}
+
+// Simple user model for permissions
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("viewer") // admin, editor, viewer
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
