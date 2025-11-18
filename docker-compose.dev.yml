@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for control plane
+  postgres:
+    image: postgres:15-alpine
+    container_name: admin-panel-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB:-admin_panel_control}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Development Next.js application
+  app:
+    image: node:18-alpine
+    container_name: admin-panel-app-dev
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin123}@postgres:5432/${POSTGRES_DB:-admin_panel_control}
+    env_file:
+      - .env
+    command: sh -c "npm install && npx prisma generate && npx prisma db push && npm run dev"
+
+volumes:
+  postgres_dev_data:
+    driver: local

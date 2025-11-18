@@ -1,466 +1,380 @@
 # No-Code Admin Panel Builder
 
-🚀 Auto-generate beautiful CRUD admin panels for any PostgreSQL database. Connect your database, introspect the schema, and get instant admin interfaces with zero code.
+> Auto-generate beautiful, type-safe CRUD admin panels for any PostgreSQL database with zero code.
 
-## Features
+## Overview
 
-- ✅ **Automatic Introspection**: Connect to any PostgreSQL database and automatically discover tables and columns
-- ✅ **Dynamic UI Generation**: Instantly create list, detail, and edit views for all your tables
-- ✅ **Type-Aware Forms**: Smart form fields based on column types (text, number, date, boolean, JSON, etc.)
-- ✅ **Role-Based Permissions**: Built-in support for admin, editor, and viewer roles
-- ✅ **Fully Customizable**: Edit entity configs, field visibility, and view layouts
-- ✅ **Production Ready**: Built with Next.js 14, TypeScript, Prisma, and Tailwind CSS
+The No-Code Admin Panel Builder is a full-stack Next.js application that automatically generates admin interfaces for PostgreSQL databases. Simply connect your database, run introspection, and instantly get fully-functional admin panels with list, detail, and edit views.
 
-## Quick Start
+**Key capabilities:**
+- 🔍 **Automatic Schema Introspection** - Discover tables, columns, relationships, and constraints
+- 🎨 **Dynamic UI Generation** - Instant CRUD interfaces with smart, type-aware form fields
+- 🔐 **Role-Based Access Control** - Admin, Editor, and Viewer roles with granular permissions
+- ⚡ **Type-Safe API** - End-to-end TypeScript with Zod validation
+- 🐳 **Docker Ready** - Full Docker Compose setup for local and production deployment
 
-### Prerequisites
+Perfect for:
+- **Internal tools** - Quickly build admin panels for any application
+- **Database management** - Visual interface for PostgreSQL databases
+- **Rapid prototyping** - Test database schemas with instant UIs
+- **Outsourced admin** - Centralize admin UIs for multiple services
 
-- Node.js 18+ and npm/yarn/pnpm
-- PostgreSQL database for the control plane
-- PostgreSQL database(s) you want to manage
+## Tech Stack
 
-### Installation
+### Core Framework
+- **Next.js 14** - React framework with App Router and API Routes
+- **TypeScript** - Full type safety across frontend and backend
+- **Tailwind CSS** - Utility-first styling
 
-1. **Clone and install dependencies**:
+### Database & ORM
+- **Prisma** - Type-safe ORM for control plane database
+- **PostgreSQL** - Primary database (control plane + target databases)
+- **pg** - Direct PostgreSQL driver for dynamic target database queries
+
+### Validation & Testing
+- **Zod** - Runtime type validation for API requests
+- **Vitest** - Fast unit testing framework with coverage
+
+### Deployment
+- **Docker** - Containerization with multi-stage builds
+- **Docker Compose** - Local development and production orchestration
+
+## Domain Model
+
+### Control Plane Entities
+
+The control plane stores metadata about connections and configurations:
+
+```
+User
+├─ email (unique)
+├─ name
+└─ role (admin | editor | viewer)
+
+Connection
+├─ name
+├─ type (postgres)
+├─ configJson (host, port, database, credentials)
+└─ entities → EntityConfig[]
+
+EntityConfig
+├─ connectionId → Connection
+├─ tableName (actual table in target DB)
+├─ displayName (human-readable)
+├─ fieldsJson (array of field configurations)
+├─ permissionsJson (role-based permissions)
+└─ views → ViewConfig[]
+
+ViewConfig
+├─ entityId → EntityConfig
+├─ type (list | detail | edit)
+└─ layoutJson (columns, sorting, sections, etc.)
+```
+
+### Data Flow
+
+1. **Connection** → Stores target database credentials
+2. **Introspection** → Discovers tables and columns from target database
+3. **EntityConfig** → Stores metadata about each table
+4. **ViewConfig** → Defines how each table is displayed
+5. **Dynamic API** → Queries target database based on configurations
+6. **Dynamic UI** → Renders views based on EntityConfig and ViewConfig
+
+## Getting Started
+
+### Requirements
+
+- **Node.js** 18+ (with npm, yarn, or pnpm)
+- **PostgreSQL** 15+ (for control plane database)
+- **Docker** (optional, for containerized deployment)
+
+### Setup Steps
+
+#### 1. Clone and Install
+
 ```bash
-git clone <your-repo>
+git clone <your-repo-url>
 cd no-code-admin-panel-builder
 npm install
 ```
 
-2. **Set up the control plane database**:
+#### 2. Environment Configuration
+
 ```bash
-# Copy the example env file
+# Copy example environment file
 cp .env.example .env
-
-# Edit .env and add your control plane database URL
-# DATABASE_URL="postgresql://user:password@localhost:5432/admin_panel_control"
-
-# Generate Prisma client and push schema
-npm run prisma:generate
-npm run prisma:push
-
-# (Optional) Seed with sample users
-npm run prisma:seed
 ```
 
-3. **Start the development server**:
+Edit `.env` and set your control plane database URL:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/admin_panel_control"
+```
+
+#### 3. Database Setup
+
+```bash
+# Generate Prisma Client
+npm run db:generate
+
+# Push schema to database
+npm run db:push
+
+# Seed with demo data (users, sample connection, entities)
+npm run db:seed
+```
+
+#### 4. Start Development Server
+
 ```bash
 npm run dev
 ```
 
-4. **Open your browser**:
-Navigate to [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## How It Works
+### Docker Setup (Alternative)
 
-### 1. Add a Database Connection
+For a fully containerized setup:
 
-Click "Add Connection" and provide your database credentials:
-- **Name**: A friendly name for your connection
-- **Host**: Database host (e.g., `localhost`)
-- **Port**: Database port (usually `5432` for PostgreSQL)
-- **Database**: Name of your database
-- **Username & Password**: Your database credentials
-- **SSL**: Enable if your database requires SSL
+```bash
+# Copy environment file
+cp .env.example .env
 
-The system will test the connection before saving.
+# Start all services (PostgreSQL + App)
+docker compose up -d
 
-### 2. Introspect Your Database
+# View logs
+docker compose logs -f app
 
-After adding a connection, click "Introspect" to automatically:
-- Discover all tables in your database
-- Extract column information (names, types, constraints)
+# Stop services
+docker compose down
+```
+
+For development with hot reload:
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+### Available Scripts
+
+```bash
+# Development
+npm run dev              # Start dev server with hot reload
+npm run build            # Build for production
+npm run start            # Start production server
+
+# Database
+npm run db:generate      # Generate Prisma Client
+npm run db:push          # Push schema without migrations
+npm run db:migrate       # Run migrations (recommended for production)
+npm run db:seed          # Seed demo data
+npm run db:studio        # Open Prisma Studio GUI
+npm run db:reset         # Reset database (dangerous!)
+
+# Testing & Quality
+npm run test             # Run tests with Vitest
+npm run test:ui          # Run tests with UI
+npm run test:coverage    # Generate coverage report
+npm run lint             # Lint code with ESLint
+npm run type-check       # TypeScript type checking
+```
+
+## Example Flow (Vertical Slice)
+
+This section demonstrates the complete end-to-end flow using the marketplace example.
+
+### 1. Prepare Target Database
+
+First, create a sample database with the marketplace schema:
+
+```bash
+# Create database
+createdb marketplace_demo
+
+# Load schema
+psql marketplace_demo < examples/marketplace.sql
+```
+
+This creates tables for: vendors, products, categories, customers, orders, order_items, and reviews.
+
+### 2. Add Database Connection
+
+Navigate to [http://localhost:3000/connections](http://localhost:3000/connections) and click **"Add Connection"**.
+
+Fill in the form:
+- **Name**: My Marketplace
+- **Type**: PostgreSQL
+- **Host**: localhost
+- **Port**: 5432
+- **Database**: marketplace_demo
+- **Username**: your_username
+- **Password**: your_password
+
+Click **"Create Connection"**. The system will test the connection before saving.
+
+### 3. Introspect Database
+
+On the connections page, click the **"Introspect"** button for your newly created connection.
+
+The system will:
+- Query `information_schema` to discover all tables
+- Extract column metadata (types, constraints, nullability)
 - Identify primary keys and foreign keys
-- Create default entity configurations
-- Generate list, detail, and edit view layouts
+- Create `EntityConfig` entries for each table
+- Generate default `ViewConfig` layouts (list, detail, edit)
 
-### 3. Manage Your Data
+You should see a success message: "Found 7 tables."
 
-Navigate to any entity to:
-- **List View**: Browse all records with pagination and sorting
-- **Detail View**: View full details of a single record
-- **Edit View**: Create or update records with smart form fields
-- **Delete**: Remove records with confirmation
+### 4. Browse Entities
+
+Click on any entity badge (e.g., **"Products"**) to view the list page.
+
+**List View** (`/admin/[entityId]/list`):
+- Displays paginated table of all products
+- Shows columns: ID, Name, Price, Stock, Active
+- Sortable columns
+- Action buttons: View (👁️), Edit (✏️), Delete (🗑️)
+
+### 5. View Details
+
+Click the **eye icon** (👁️) on any product row.
+
+**Detail View** (`/admin/[entityId]/detail/[rowId]`):
+- Shows all fields in a clean, labeled layout
+- Displays related data
+- "Edit" button in header
+
+### 6. Create/Edit Records
+
+Click **"Add New"** or the **edit icon** (✏️).
+
+**Edit View** (`/admin/[entityId]/edit/[rowId]`):
+- Smart form fields based on column types:
+  - Text inputs for strings
+  - Number inputs for integers/decimals
+  - Checkboxes for booleans
+  - Date pickers for dates
+  - JSON editor for JSON columns
+- Required field validation
+- Save/Cancel buttons
+
+### 7. API Access
+
+All operations are available via REST API:
+
+```bash
+# List products with pagination
+curl "http://localhost:3000/api/entities/{entityId}/data?page=1&pageSize=20"
+
+# Get single product
+curl "http://localhost:3000/api/entities/{entityId}/data/{id}"
+
+# Create product
+curl -X POST "http://localhost:3000/api/entities/{entityId}/data" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "New Product", "price": 29.99, "stock": 100}'
+
+# Update product
+curl -X PATCH "http://localhost:3000/api/entities/{entityId}/data/{id}" \
+  -H "Content-Type: application/json" \
+  -d '{"price": 24.99}'
+
+# Delete product
+curl -X DELETE "http://localhost:3000/api/entities/{entityId}/data/{id}"
+```
+
+### Complete Vertical Slice Summary
+
+✅ **Database Connection** → Added and tested
+✅ **Schema Introspection** → Discovered 7 tables with full metadata
+✅ **Entity Configuration** → Auto-generated field configs and permissions
+✅ **List View** → Browse products with pagination
+✅ **Detail View** → View complete product information
+✅ **Edit View** → Create and update products with type-safe forms
+✅ **API** → Full REST API for all CRUD operations
+✅ **Validation** → Zod schemas protect all endpoints
+✅ **Error Handling** → Consistent error responses with codes
+
+## Demo Credentials
+
+After running `npm run db:seed`, you'll have these users:
+
+- **Admin**: `admin@example.com` (full access)
+- **Editor**: `editor@example.com` (no delete permission)
+- **Viewer**: `viewer@example.com` (read-only)
+
+**Note**: Authentication is currently a stub. Implement proper auth before production use.
+
+## Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run with UI
+npm run test:ui
+```
+
+**Test coverage includes:**
+- ✅ Validation schemas (Zod)
+- ✅ API error handling
+- ✅ Introspection helpers
+- ✅ Permission system
 
 ## Architecture
 
-### Control Plane (Metadata Storage)
-
-The control plane uses its own PostgreSQL database to store:
-- **Connections**: Database connection configurations
-- **EntityConfig**: Table metadata and field configurations
-- **ViewConfig**: UI layout configurations for different views
-- **Users**: User accounts and role information
-
-### Target Databases
-
-Target databases are the databases you want to manage. The system connects to them dynamically to:
-- Introspect schema
-- Query data
-- Perform CRUD operations
-
-### Tech Stack
-
-- **Frontend + Backend**: Next.js 14 (App Router + API Routes)
-- **Database**: Prisma + PostgreSQL
-- **Styling**: Tailwind CSS
-- **TypeScript**: Full type safety
-- **Icons**: Lucide React
-
-## Use Cases
-
-### 🛒 Marketplace Admin Panel
-
-Perfect for managing e-commerce platforms:
-
-```sql
--- Example marketplace schema
-CREATE TABLE vendors (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  verified BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE products (
-  id SERIAL PRIMARY KEY,
-  vendor_id INTEGER REFERENCES vendors(id),
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  price DECIMAL(10, 2) NOT NULL,
-  stock INTEGER DEFAULT 0,
-  active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE orders (
-  id SERIAL PRIMARY KEY,
-  user_email VARCHAR(255) NOT NULL,
-  total DECIMAL(10, 2) NOT NULL,
-  status VARCHAR(50) DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-**What you get**:
-- Vendor management with verification controls
-- Product catalog with pricing and inventory
-- Order tracking and status updates
-- All with zero code!
-
-### 📊 CRM (Customer Relationship Management)
-
-Manage your customer data and sales pipeline:
-
-```sql
--- Example CRM schema
-CREATE TABLE companies (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  industry VARCHAR(100),
-  website VARCHAR(255),
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE contacts (
-  id SERIAL PRIMARY KEY,
-  company_id INTEGER REFERENCES companies(id),
-  first_name VARCHAR(100) NOT NULL,
-  last_name VARCHAR(100) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  phone VARCHAR(50),
-  position VARCHAR(100),
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE deals (
-  id SERIAL PRIMARY KEY,
-  company_id INTEGER REFERENCES companies(id),
-  contact_id INTEGER REFERENCES contacts(id),
-  title VARCHAR(255) NOT NULL,
-  value DECIMAL(10, 2),
-  stage VARCHAR(50) DEFAULT 'prospecting',
-  probability INTEGER DEFAULT 0,
-  expected_close_date DATE,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE activities (
-  id SERIAL PRIMARY KEY,
-  contact_id INTEGER REFERENCES contacts(id),
-  type VARCHAR(50) NOT NULL,
-  subject VARCHAR(255),
-  notes TEXT,
-  completed BOOLEAN DEFAULT false,
-  due_date TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-**What you get**:
-- Company directory with industry tracking
-- Contact management with relationships
-- Deal pipeline with value tracking
-- Activity logging and task management
-
-### 🎫 Helpdesk / Support System
-
-Build a customer support platform:
-
-```sql
--- Example helpdesk schema
-CREATE TABLE customers (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  phone VARCHAR(50),
-  company VARCHAR(255),
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE agents (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE tickets (
-  id SERIAL PRIMARY KEY,
-  customer_id INTEGER REFERENCES customers(id),
-  assigned_to INTEGER REFERENCES agents(id),
-  subject VARCHAR(255) NOT NULL,
-  description TEXT,
-  status VARCHAR(50) DEFAULT 'open',
-  priority VARCHAR(50) DEFAULT 'medium',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE ticket_comments (
-  id SERIAL PRIMARY KEY,
-  ticket_id INTEGER REFERENCES tickets(id),
-  author_type VARCHAR(50) NOT NULL,
-  author_name VARCHAR(255) NOT NULL,
-  content TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-**What you get**:
-- Customer database
-- Agent management
-- Ticket tracking with status and priority
-- Comment threads for conversations
-
-## Outsourcing Admin UIs
-
-One powerful use case is **outsourcing your admin UI** from your main application:
-
-### Why?
-
-- **Separation of Concerns**: Keep admin logic separate from your customer-facing app
-- **Faster Development**: Don't spend time building admin panels
-- **Shared Admin**: One admin panel can manage multiple databases/services
-- **Specialized Teams**: Let your main app team focus on features, not admin UIs
-
-### How?
-
-1. Deploy this admin panel builder as a standalone service
-2. Add connections to all your application databases
-3. Introspect each database
-4. Grant access to your team members
-
-Your main applications can focus on their core functionality while this service handles all admin/backoffice needs.
-
-## Permissions & Security
-
-### Built-in Roles
-
-- **Admin**: Full access (read, create, update, delete)
-- **Editor**: Can read, create, and update (no delete)
-- **Viewer**: Read-only access
-
-### Customizing Permissions
-
-Edit entity configurations to customize role permissions:
-
-```typescript
-{
-  "admin": {
-    "read": true,
-    "create": true,
-    "update": true,
-    "delete": true
-  },
-  "editor": {
-    "read": true,
-    "create": true,
-    "update": true,
-    "delete": false
-  },
-  "viewer": {
-    "read": true,
-    "create": false,
-    "update": false,
-    "delete": false
-  }
-}
-```
-
-### Authentication (TODO)
-
-The current version includes a permission system stub. For production use, implement:
-- JWT-based authentication
-- Session management
-- OAuth integration
-- RBAC (Role-Based Access Control)
-
-Check `middleware.ts` and `lib/permissions.ts` for extension points.
-
-## Customization
-
-### Field Configuration
-
-Each field can be customized:
-
-```typescript
-{
-  "name": "email",
-  "type": "text",
-  "label": "Email Address",
-  "required": true,
-  "primaryKey": false,
-  "visible": {
-    "list": true,     // Show in list view
-    "detail": true,   // Show in detail view
-    "edit": true      // Show in edit form
-  },
-  "editable": true
-}
-```
-
-### View Layouts
-
-Customize how data is displayed:
-
-**List View**:
-```typescript
-{
-  "columns": ["id", "name", "email", "created_at"],
-  "defaultSort": {
-    "field": "created_at",
-    "order": "desc"
-  },
-  "pageSize": 20
-}
-```
-
-**Detail View**:
-```typescript
-{
-  "fields": ["id", "name", "email", "phone", "created_at"],
-  "sections": [
-    {
-      "title": "Basic Information",
-      "fields": ["name", "email", "phone"]
-    },
-    {
-      "title": "Metadata",
-      "fields": ["id", "created_at", "updated_at"]
-    }
-  ]
-}
-```
-
-## API Routes
-
-The system exposes RESTful APIs:
-
-### Connections
-- `GET /api/connections` - List all connections
-- `POST /api/connections` - Create a connection
-- `GET /api/connections/:id` - Get a connection
-- `DELETE /api/connections/:id` - Delete a connection
-- `POST /api/connections/:id/introspect` - Introspect database
-
-### Entities
-- `GET /api/entities` - List all entities
-- `GET /api/entities/:id` - Get entity config
-- `PATCH /api/entities/:id` - Update entity config
-
-### Data
-- `GET /api/entities/:id/data` - Query data (with pagination)
-- `POST /api/entities/:id/data` - Create a row
-- `GET /api/entities/:id/data/:rowId` - Get a row
-- `PATCH /api/entities/:id/data/:rowId` - Update a row
-- `DELETE /api/entities/:id/data/:rowId` - Delete a row
-
-## Deployment
-
-### Vercel (Recommended)
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-```
-
-Set environment variables in Vercel dashboard:
-- `DATABASE_URL`: Your control plane database URL
-
-### Docker
-
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run prisma:generate
-RUN npm run build
-
-CMD ["npm", "start"]
-```
-
-### Traditional Hosting
-
-1. Build the project: `npm run build`
-2. Start the server: `npm start`
-3. Ensure PostgreSQL is accessible
-
-## Roadmap
-
-- [ ] MySQL support
-- [ ] MongoDB support
-- [ ] Advanced filtering and search
-- [ ] Bulk operations
-- [ ] Data export (CSV, Excel)
-- [ ] API key management
-- [ ] Audit logs
-- [ ] Custom actions/buttons
-- [ ] Relationship visualization
-- [ ] Multi-language support
+For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+**Key design decisions:**
+- **Two-database pattern**: Control plane (Prisma) + dynamic target databases (raw SQL)
+- **Configuration as JSON**: Flexible metadata storage without schema changes
+- **Dynamic rendering**: Component registry for type-aware field rendering
+- **API-first design**: All features accessible via REST API
+
+## Future Extensions
+
+### High Priority
+- [ ] **MySQL Support** - Add MySQL introspector and type mappings
+- [ ] **Authentication** - Implement JWT/OAuth with proper session management
+- [ ] **Credential Encryption** - Encrypt database credentials at rest
+- [ ] **Advanced Filtering** - Search, multi-column filters, date ranges
+- [ ] **Bulk Operations** - Select multiple rows, bulk delete/update
+- [ ] **Data Export** - Export to CSV, Excel, JSON
+
+### Medium Priority
+- [ ] **MongoDB Support** - NoSQL database introspection
+- [ ] **Relationship Visualization** - Display foreign key relationships
+- [ ] **Custom Field Renderers** - Plugin system for custom field types
+- [ ] **Theme Customization** - Dark mode, custom color schemes
+- [ ] **Multi-language** - i18n support
+- [ ] **API Documentation** - Auto-generated OpenAPI/Swagger docs
+
+### Nice to Have
+- [ ] **File Upload** - Handle file/image fields with S3 integration
+- [ ] **Rich Text Editor** - WYSIWYG for text fields
+- [ ] **Charts & Analytics** - Dashboard with data visualization
+- [ ] **Webhooks** - Trigger external services on data changes
+- [ ] **Audit Logs** - Track all data modifications
+- [ ] **GraphQL API** - Alternative to REST
+- [ ] **Backup/Restore** - Database backup and restore via UI
+- [ ] **CLI Tool** - Command-line interface for management
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT License - feel free to use this in your projects!
-
-## Support
-
-For issues, questions, or feature requests, please open an issue on GitHub.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-Built with ❤️ using Next.js, Prisma, and TypeScript
+**Questions or issues?** Open an issue on GitHub or check the [documentation](GETTING_STARTED.md).
+
+Built with ❤️ using Next.js, Prisma, and TypeScript.

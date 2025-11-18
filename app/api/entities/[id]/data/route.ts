@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createIntrospector } from '@/lib/introspection'
+import { DataQuerySchema } from '@/lib/validations'
+import { handleApiError, successResponse, createdResponse, ApiException } from '@/lib/api-response'
 import type { ConnectionConfig } from '@/lib/types'
 
 // GET /api/entities/:id/data - Query data from the target database
@@ -10,10 +12,8 @@ export async function GET(
 ) {
   try {
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1', 10)
-    const pageSize = parseInt(searchParams.get('pageSize') || '20', 10)
-    const orderBy = searchParams.get('orderBy') || undefined
-    const orderDirection = (searchParams.get('orderDirection') || 'ASC') as 'ASC' | 'DESC'
+    const queryParams = Object.fromEntries(searchParams.entries())
+    const validatedQuery = DataQuerySchema.parse(queryParams)
 
     const entity = await prisma.entityConfig.findUnique({
       where: { id: params.id },
@@ -21,41 +21,34 @@ export async function GET(
     })
 
     if (!entity) {
-      return NextResponse.json(
-        { error: 'Entity not found' },
-        { status: 404 }
-      )
+      throw new ApiException('Entity not found', 404, 'ENTITY_NOT_FOUND')
     }
 
     const config = JSON.parse(entity.connection.configJson) as ConnectionConfig
     const introspector = createIntrospector(entity.connection.type as any, config)
 
-    const offset = (page - 1) * pageSize
+    const offset = (validatedQuery.page - 1) * validatedQuery.pageSize
     const data = await introspector.queryData(entity.tableName, {
-      limit: pageSize,
+      limit: validatedQuery.pageSize,
       offset,
-      orderBy,
-      orderDirection,
+      orderBy: validatedQuery.orderBy,
+      orderDirection: validatedQuery.orderDirection,
     })
 
     const total = await introspector.countRows(entity.tableName)
     await introspector.close()
 
-    return NextResponse.json({
+    return successResponse({
       data,
       pagination: {
-        page,
-        pageSize,
+        page: validatedQuery.page,
+        pageSize: validatedQuery.pageSize,
         total,
-        totalPages: Math.ceil(total / pageSize),
+        totalPages: Math.ceil(total / validatedQuery.pageSize),
       },
     })
   } catch (error) {
-    console.error('Failed to fetch data:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch data', details: (error as Error).message },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
 
@@ -67,16 +60,17 @@ export async function POST(
   try {
     const body = await request.json()
 
+    if (!body || Object.keys(body).length === 0) {
+      throw new ApiException('Request body cannot be empty', 400, 'EMPTY_BODY')
+    }
+
     const entity = await prisma.entityConfig.findUnique({
       where: { id: params.id },
       include: { connection: true },
     })
 
     if (!entity) {
-      return NextResponse.json(
-        { error: 'Entity not found' },
-        { status: 404 }
-      )
+      throw new ApiException('Entity not found', 404, 'ENTITY_NOT_FOUND')
     }
 
     const config = JSON.parse(entity.connection.configJson) as ConnectionConfig
@@ -85,12 +79,8 @@ export async function POST(
     const newRow = await introspector.insertRow(entity.tableName, body)
     await introspector.close()
 
-    return NextResponse.json(newRow, { status: 201 })
+    return createdResponse(newRow, 'Row created successfully')
   } catch (error) {
-    console.error('Failed to create row:', error)
-    return NextResponse.json(
-      { error: 'Failed to create row', details: (error as Error).message },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

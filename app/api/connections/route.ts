@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createIntrospector } from '@/lib/introspection'
-import type { ConnectionConfig } from '@/lib/types'
+import { CreateConnectionSchema } from '@/lib/validations'
+import { handleApiError, successResponse, createdResponse, ApiException } from '@/lib/api-response'
 
 // GET /api/connections - List all connections
 export async function GET() {
@@ -19,13 +20,9 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(connections)
+    return successResponse(connections)
   } catch (error) {
-    console.error('Failed to fetch connections:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch connections' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
 
@@ -33,42 +30,32 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, type, config } = body
-
-    if (!name || !type || !config) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, type, config' },
-        { status: 400 }
-      )
-    }
+    const validatedData = CreateConnectionSchema.parse(body)
 
     // Test the connection before saving
-    const introspector = createIntrospector(type, config as ConnectionConfig)
+    const introspector = createIntrospector(validatedData.type, validatedData.config)
     const isValid = await introspector.testConnection()
     await introspector.close()
 
     if (!isValid) {
-      return NextResponse.json(
-        { error: 'Failed to connect to database with provided credentials' },
-        { status: 400 }
+      throw new ApiException(
+        'Failed to connect to database with provided credentials',
+        400,
+        'CONNECTION_TEST_FAILED'
       )
     }
 
     // Save the connection
     const connection = await prisma.connection.create({
       data: {
-        name,
-        type,
-        configJson: JSON.stringify(config),
+        name: validatedData.name,
+        type: validatedData.type,
+        configJson: JSON.stringify(validatedData.config),
       },
     })
 
-    return NextResponse.json(connection, { status: 201 })
+    return createdResponse(connection, 'Connection created successfully')
   } catch (error) {
-    console.error('Failed to create connection:', error)
-    return NextResponse.json(
-      { error: 'Failed to create connection' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
